@@ -1,7 +1,7 @@
-diff --git a/cli/vgmstream_cli.c b/cli/vgmstream_cli.c
+diff --git cli/vgmstream_cli.c cli/vgmstream_cli.c
 index df10c312..4ee523a2 100644
---- a/cli/vgmstream_cli.c
-+++ b/cli/vgmstream_cli.c
+--- cli/vgmstream_cli.c
++++ cli/vgmstream_cli.c
 @@ -10,8 +10,11 @@
  #ifdef WIN32
  #include <io.h>
@@ -137,19 +137,18 @@ index df10c312..4ee523a2 100644
 +        print_usage(argv[0], 0);
 +        goto fail;
 +    }
- 
--        /* check there aren't commands after filename */
--        for (int i = optind; i < argc; i++) {
--            if (argv[i][0] == '-') {
--                fprintf(stderr, "input files must go after options\n");
--                goto fail;
++
 +    /* expand directory inputs */
 +    int capacity = 10;
 +    int count = 0;
 +    char** expanded_files = malloc(capacity * sizeof(char*));
 +    if (!expanded_files) goto fail;
-+
-+    for (int i = optind; i < argc; i++) {
+ 
+-        /* check there aren't commands after filename */
+     for (int i = optind; i < argc; i++) {
+-            if (argv[i][0] == '-') {
+-                fprintf(stderr, "input files must go after options\n");
+-                goto fail;
 +        if (is_directory(argv[i])) {
 +            process_directory(argv[i], &expanded_files, &count, &capacity);
 +        } else {
@@ -162,17 +161,12 @@ index df10c312..4ee523a2 100644
          }
      }
  
--    cfg->infilenames = &argv[optind];
--    cfg->infilenames_count = argc - optind;
--    if (cfg->infilenames_count <= 0) {
--        fprintf(stderr, "missing input file\n");
--        print_usage(argv[0], 0);
 +    if (count == 0 && (argc - optind > 0)) {
 +        fprintf(stderr, "no matching .wem files found in input directories\n");
 +        free(expanded_files);
-         goto fail;
-     }
- 
++        goto fail;
++    }
++
 +    if (count > 0) {
 +        cfg->infilenames = expanded_files;
 +        cfg->infilenames_count = count;
@@ -181,10 +175,14 @@ index df10c312..4ee523a2 100644
 +    }
 +    else {
 +        free(expanded_files);
-+        cfg->infilenames = &argv[optind];
-+        cfg->infilenames_count = argc - optind;
-+    }
-+
+         cfg->infilenames = &argv[optind];
+         cfg->infilenames_count = argc - optind;
+-    if (cfg->infilenames_count <= 0) {
+-        fprintf(stderr, "missing input file\n");
+-        print_usage(argv[0], 0);
+-        goto fail;
+     }
+ 
 +
      if (cfg->outfilename && strchr(cfg->outfilename, '?') != NULL) {
          cfg->outfilename_config = cfg->outfilename;
@@ -234,10 +232,10 @@ index df10c312..4ee523a2 100644
      /* ok if at least one succeeds, for programs that check result code */
      if (!ok)
          goto fail;
-diff --git a/cli/vgmstream_cli.h b/cli/vgmstream_cli.h
+diff --git cli/vgmstream_cli.h cli/vgmstream_cli.h
 index e6bb3237..91c9f341 100644
---- a/cli/vgmstream_cli.h
-+++ b/cli/vgmstream_cli.h
+--- cli/vgmstream_cli.h
++++ cli/vgmstream_cli.h
 @@ -11,6 +11,10 @@ typedef struct {
      int infilenames_count;
      const char* infilename;
@@ -257,10 +255,10 @@ index e6bb3237..91c9f341 100644
      int seek_samples1;
      int seek_samples2;
      int downmix_channels;
-diff --git a/cli/vgmstream_cli_utils.c b/cli/vgmstream_cli_utils.c
+diff --git cli/vgmstream_cli_utils.c cli/vgmstream_cli_utils.c
 index 0c928368..1deb90ae 100644
---- a/cli/vgmstream_cli_utils.c
-+++ b/cli/vgmstream_cli_utils.c
+--- cli/vgmstream_cli_utils.c
++++ cli/vgmstream_cli_utils.c
 @@ -21,6 +21,8 @@ static void clean_filename(char* dst, int clean_paths) {
  void replace_filename(char* dst, size_t dstsize, cli_config_t* cfg, libvgmstream_t* vgmstream) {
      int subsong;

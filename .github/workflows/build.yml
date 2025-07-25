@@ -21,10 +21,12 @@ jobs:
 
       - name: Apply patches
         working-directory: ./vgmstream
+        shell: pwsh
         run: |
-          git apply --ignore-whitespace -v ../patch/0001.add_out_basename.patch
-          git apply --ignore-whitespace -v ../patch/0002.supports_directory_recursion.patch
-          git apply --ignore-whitespace -v ../patch/0003.add_watermark.patch
+          Get-ChildItem ../patch/*.patch | Sort-Object Name | ForEach-Object {
+            Write-Host "Applying patch: $($_.Name)"
+            git apply --ignore-whitespace -v $_.FullName
+          }
 
       - name: Get version
         id: version
@@ -73,9 +75,10 @@ jobs:
       - name: Apply patches
         working-directory: ./vgmstream
         run: |
-          git apply --ignore-whitespace -v ../patch/0001.add_out_basename.patch
-          git apply --ignore-whitespace -v ../patch/0002.supports_directory_recursion.patch
-          git apply --ignore-whitespace -v ../patch/0003.add_watermark.patch
+          for patch_file in ../patch/*.patch; do
+            echo "Applying patch: ${patch_file}"
+            git apply --ignore-whitespace -v "${patch_file}"
+          done
 
       - name: Get version
         id: version

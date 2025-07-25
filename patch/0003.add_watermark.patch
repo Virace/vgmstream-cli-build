@@ -1,0 +1,14 @@
+diff --git a/cli/vgmstream_cli.c b/cli/vgmstream_cli.c
+index 3a213903..5332b767 100644
+--- a/cli/vgmstream_cli.c
++++ b/cli/vgmstream_cli.c
+@@ -29,7 +29,8 @@
+ #ifndef VGMSTREAM_VERSION
+ #define VGMSTREAM_VERSION "unknown version " __DATE__
+ #endif
+-#define APP_NAME  "vgmstream CLI decoder " VGMSTREAM_VERSION
++#define CUSTOM_BUILD_TAG " (mod by Virace)"
++#define APP_NAME  "vgmstream CLI decoder " VGMSTREAM_VERSION CUSTOM_BUILD_TAG
+ #define APP_INFO  APP_NAME " (" __DATE__ ")"
+ 
+ 

@@ -1,0 +1,208 @@
+name: Build and Release vgmstream-cli
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout local repository
+        uses: actions/checkout@v4
+
+      - name: Clone vgmstream
+        run: git clone https://github.com/vgmstream/vgmstream.git
+
+      - name: Fetch Git tags
+        working-directory: ./vgmstream
+        run: git fetch --prune --tags
+
+      - name: Apply patches
+        working-directory: ./vgmstream
+        run: |
+          git apply --ignore-whitespace -v ../patch/0001.add_out_basename.patch
+          git apply --ignore-whitespace -v ../patch/0002.supports_directory_recursion.patch
+          git apply --ignore-whitespace -v ../patch/0003.add_watermark.patch
+
+      - name: Get version
+        id: version
+        working-directory: ./vgmstream
+        shell: pwsh
+        run: |
+          $version = git describe --tags --always
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
+
+      - name: Initialize build environment
+        working-directory: ./vgmstream
+        shell: cmd
+        run: powershell -ExecutionPolicy Bypass -NoProfile -File .\msvc-build.ps1 Init
+
+      - name: Build
+        working-directory: ./vgmstream
+        shell: cmd
+        run: powershell -ExecutionPolicy Bypass -NoProfile -File .\msvc-build.ps1 Build
+
+      - name: Package Artifacts
+        working-directory: ./vgmstream
+        shell: powershell
+        run: powershell -ExecutionPolicy Bypass -NoProfile -File .\msvc-build.ps1 PackageArtifacts
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vgmstream-cli-windows
+          path: vgmstream/bin/artifacts/cli-x64
+
+  build-linux:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout local repository
+        uses: actions/checkout@v4
+
+      - name: Clone vgmstream
+        run: git clone https://github.com/vgmstream/vgmstream.git
+
+      - name: Fetch Git tags
+        working-directory: ./vgmstream
+        run: git fetch --prune --tags
+
+      - name: Apply patches
+        working-directory: ./vgmstream
+        run: |
+          git apply --ignore-whitespace -v ../patch/0001.add_out_basename.patch
+          git apply --ignore-whitespace -v ../patch/0002.supports_directory_recursion.patch
+          git apply --ignore-whitespace -v ../patch/0003.add_watermark.patch
+
+      - name: Get version
+        id: version
+        working-directory: ./vgmstream
+        run: |
+          version=$(git describe --tags --always)
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y yasm libopus-dev
+
+      - name: Create build environment
+        working-directory: ./vgmstream
+        run: |
+          cmake -E make_directory build
+          echo "RELEASE=$(lsb_release -sr)" >> $GITHUB_ENV
+
+      - name: Cache celt
+        uses: actions/cache@v4
+        with:
+          path: |
+            vgmstream/dependencies/celt-0061
+            vgmstream/dependencies/celt-0110
+            vgmstream/build/dependencies/celt-0061/libcelt/.libs
+            vgmstream/build/dependencies/celt-0110/libcelt/.libs
+          key: linux-${{ env.RELEASE }}-celt-${{ hashFiles('vgmstream/cmake/dependencies/celt.cmake') }}
+
+      - name: Cache ffmpeg
+        uses: actions/cache@v4
+        with:
+          path: |
+            vgmstream/build/dependencies/ffmpeg/bin/usr/local/include
+            vgmstream/build/dependencies/ffmpeg/bin/usr/local/lib
+          key: linux-${{ env.RELEASE }}-ffmpeg-${{ hashFiles('vgmstream/cmake/dependencies/ffmpeg.cmake') }}
+
+      - name: Cache atrac9
+        uses: actions/cache@v4
+        with:
+          path: |
+            vgmstream/build/dependencies/LibAtrac9/bin
+          key: linux-${{ env.RELEASE }}-atrac9-${{ hashFiles('vgmstream/cmake/dependencies/atrac9.cmake') }}
+
+      - name: Cache g719
+        uses: actions/cache@v4
+        with:
+          path: |
+            vgmstream/build/dependencies/libg719_decode/libg719_decode.a
+          key: linux-${{ env.RELEASE }}-g719-${{ hashFiles('vgmstream/cmake/dependencies/g719.cmake') }}
+
+      - name: Cache mpg123
+        uses: actions/cache@v4
+        with:
+          path: |
+            vgmstream/dependencies/mpg123
+            vgmstream/build/dependencies/mpg123/src/libmpg123/.libs
+          key: linux-${{ env.RELEASE }}-mpg123-${{ hashFiles('vgmstream/cmake/dependencies/mpg123.cmake') }}
+
+      - name: Cache speex
+        uses: actions/cache@v4
+        with:
+          path: |
+            vgmstream/build/dependencies/speex/libspeex/.libs
+          key: linux-${{ env.RELEASE }}-speex-${{ hashFiles('vgmstream/cmake/dependencies/speex.cmake') }}
+
+      - name: Cache ogg
+        uses: actions/cache@v4
+        with:
+          path: |
+            vgmstream/build/dependencies/ogg/libogg.a
+            vgmstream/build/dependencies/ogg/include
+          key: linux-${{ env.RELEASE }}-ogg-${{ hashFiles('vgmstream/cmake/dependencies/ogg.cmake') }}
+
+      - name: Cache vorbis
+        uses: actions/cache@v4
+        with:
+          path: |
+            vgmstream/build/dependencies/vorbis/lib/*.a
+          key: linux-${{ env.RELEASE }}-vorbis-${{ hashFiles('vgmstream/cmake/dependencies/vorbis.cmake') }}
+
+      - name: Configure CMake
+        shell: bash
+        working-directory: vgmstream/build
+        run: cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON
+
+      - name: Build
+        working-directory: vgmstream/build
+        shell: bash
+        run: cmake --build . --config Release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vgmstream-cli-linux
+          path: vgmstream/build/cli/vgmstream-cli
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build-windows, build-linux]
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          (cd artifacts/vgmstream-cli-windows && zip -r ../../vgmstream-win64.zip .)
+          (cd artifacts/vgmstream-cli-linux && zip -r ../../vgmstream-linux-cli.zip .)
+          ls -l
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.build-windows.outputs.version }}
+          name: "vgmstream-cli ${{ needs.build-windows.outputs.version }}"
+          body: |
+            Automated build of modified vgmstream-cli.
+
+            **Modifications:**
+            - Adds wildcards for output path: `?p` (source path) and `?b` (source basename).
+            - Supports directory as input for recursive scanning of `.wem` files.
+            - Adds `-Y` option to delete source file after transcoding (DANGEROUS).
+          files: |
+            vgmstream-win64.zip
+            vgmstream-linux-cli.zip 
